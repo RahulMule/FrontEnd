@@ -1,0 +1,31 @@
+﻿@page "/"
+@using GameStore.FrontEnd.GamesRepository
+@inject GameRepository gamerepository
+
+<PageTitle>Home</PageTitle>
+
+<h1>Game Catalogue</h1>
+<table class="table table-striped-columns">
+	<thead>
+		<tr>
+			<th>Name</th>
+			<th>Genre</th>
+			<th>Price</th>
+			<th>Link</th>
+		</tr>
+	</thead>
+	<tbody>
+		@foreach (var game in gamerepository.GetAllGames())
+		{
+			<tr>
+				<td>@game.Name</td>
+				<td>@game.Genre</td>
+				<td>@game.Price</td>
+			</tr>
+		}
+	</tbody>
+</table>
+
+@code{
+
+}
