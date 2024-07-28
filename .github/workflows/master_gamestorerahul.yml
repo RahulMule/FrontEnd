@@ -53,4 +53,4 @@ jobs:
           app-name: 'GameStoreRahul'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_172BA1DF1D4E42BD8B2ECD9AC7A6D30D }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_AB67B05A579C421DA8E121F734AA2942 }}
