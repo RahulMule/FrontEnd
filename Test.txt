@@ -1,0 +1,94 @@
+To validate a Bearer token issued by Azure Entra ID (formerly Azure AD) and extract the employeeid claim in FastAPI, you’ll need to:
+	1.	Validate the JWT token using Azure’s public keys (via OpenID Connect metadata).
+	2.	Extract and use the claim (employeeid) from the decoded token.
+
+Here’s a step-by-step approach:
+
+⸻
+
+1. Install Required Libraries
+
+pip install python-jose[cryptography] httpx fastapi
+
+2. Setup Constants for Azure Entra ID
+
+Get these values from your Azure AD App Registration.
+TENANT_ID = "<your-tenant-id>"
+CLIENT_ID = "<your-app-client-id>"
+OPENID_CONFIG_URL = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0/.well-known/openid-configuration"
+TENANT_ID = "<your-tenant-id>"
+CLIENT_ID = "<your-app-client-id>"
+OPENID_CONFIG_URL = f"https://login.microsoftonline.com/{TENANT_ID}/v2.0/.well-known/openid-configuration"
+
+3. Create a Dependency for Token Validation
+from fastapi import Depends, HTTPException, status, Request
+from jose import jwt, JWTError
+import httpx
+from typing import Dict
+
+class AzureADValidator:
+    def __init__(self, tenant_id: str, audience: str):
+        self.tenant_id = tenant_id
+        self.audience = audience
+        self.openid_config_url = f"https://login.microsoftonline.com/{tenant_id}/v2.0/.well-known/openid-configuration"
+        self.jwks_uri = None
+        self.public_keys = {}
+
+    async def load_jwks(self):
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(self.openid_config_url)
+            self.jwks_uri = resp.json()["jwks_uri"]
+            keys_resp = await client.get(self.jwks_uri)
+            for key in keys_resp.json()["keys"]:
+                kid = key["kid"]
+                self.public_keys[kid] = key
+
+    async def validate_token(self, token: str) -> Dict:
+        if not self.public_keys:
+            await self.load_jwks()
+        headers = jwt.get_unverified_header(token)
+        kid = headers["kid"]
+        key = self.public_keys.get(kid)
+
+        if not key:
+            raise HTTPException(status_code=401, detail="Invalid token header")
+
+        try:
+            payload = jwt.decode(
+                token,
+                key,
+                algorithms=["RS256"],
+                audience=self.audience,
+                issuer=f"https://login.microsoftonline.com/{self.tenant_id}/v2.0"
+            )
+            return payload
+        except JWTError as e:
+            raise HTTPException(status_code=401, detail=f"Token validation error: {str(e)}")
+
+# Create a validator instance
+validator = AzureADValidator(tenant_id=TENANT_ID, audience=CLIENT_ID)
+
+async def get_current_user(request: Request) -> Dict:
+    auth: str = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    token = auth.split(" ")[1]
+    claims = await validator.validate_token(token)
+    return claims
+
+
+4. Use the Dependency in FastAPI Endpoint
+from fastapi import FastAPI, Depends
+
+app = FastAPI()
+
+@app.get("/profile")
+async def get_profile(claims: dict = Depends(get_current_user)):
+    employee_id = claims.get("employeeid")
+    if not employee_id:
+        raise HTTPException(status_code=403, detail="employeeid claim not found in token")
+    return {"employee_id": employee_id}
+Summary
+	•	Token is validated using Azure’s JWKS public key.
+	•	Claims are extracted after validation.
+	•	You can now use employeeid in your API logic.
